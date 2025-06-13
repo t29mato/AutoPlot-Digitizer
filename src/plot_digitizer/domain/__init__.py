@@ -1,1 +1,1 @@
-# Domain layer __init__.py
+# Domain package

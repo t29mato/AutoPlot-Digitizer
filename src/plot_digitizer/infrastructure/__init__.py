@@ -1,1 +1,1 @@
-# Infrastructure layer __init__.py
+# Infrastructure package

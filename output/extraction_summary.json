@@ -1,0 +1,84 @@
+{
+  "total_plots": 2,
+  "total_points": 277,
+  "plots_summary": [
+    {
+      "id": 0,
+      "x_axis": {
+        "label": "",
+        "unit": null
+      },
+      "y_axis": {
+        "label": "",
+        "unit": null
+      },
+      "series_count": 6,
+      "total_points": 132,
+      "series_details": [
+        {
+          "name": "black",
+          "points_count": 31
+        },
+        {
+          "name": "red1",
+          "points_count": 24
+        },
+        {
+          "name": "red2",
+          "points_count": 1
+        },
+        {
+          "name": "blue",
+          "points_count": 24
+        },
+        {
+          "name": "teal",
+          "points_count": 25
+        },
+        {
+          "name": "magenta",
+          "points_count": 27
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "x_axis": {
+        "label": "ase",
+        "unit": null
+      },
+      "y_axis": {
+        "label": "",
+        "unit": null
+      },
+      "series_count": 6,
+      "total_points": 145,
+      "series_details": [
+        {
+          "name": "black",
+          "points_count": 29
+        },
+        {
+          "name": "red1",
+          "points_count": 21
+        },
+        {
+          "name": "red2",
+          "points_count": 6
+        },
+        {
+          "name": "blue",
+          "points_count": 42
+        },
+        {
+          "name": "teal",
+          "points_count": 20
+        },
+        {
+          "name": "magenta",
+          "points_count": 27
+        }
+      ]
+    }
+  ]
+}
