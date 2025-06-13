@@ -1,18 +1,21 @@
 [global]
 developmentMode = false
 showWarningOnDirectExecution = false
+dataFrameSerialization = "legacy"
 
 [server]
-headless = false
+headless = true
 port = 8501
 enableCORS = false
 enableXsrfProtection = false
 maxUploadSize = 200
+runOnSave = true
 
 [browser]
 gatherUsageStats = false
-serverAddress = "localhost"
+serverAddress = "0.0.0.0"
 serverPort = 8501
+showErrorDetails = true
 
 [theme]
 primaryColor = "#ff6b6b"
@@ -20,3 +23,7 @@ backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f0f2f6"
 textColor = "#262730"
 font = "sans serif"
+
+[runner]
+magicEnabled = true
+fastReruns = true

@@ -27,13 +27,27 @@ src_path = project_root / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
+# Fix OpenCV issues in cloud environments
+import os
+os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '0'
+
 try:
+    # Test OpenCV import and fix common issues
+    import cv2
+    # Test basic functionality
+    _ = cv2.__version__
+
     from plot_digitizer.infrastructure.extractor_impl import OpenCVPlotExtractor
     from plot_digitizer.use_cases.extract_plots import ExtractPlotsUseCase
     from plot_digitizer.domain.models import DigitizationResult
 except ImportError as e:
     st.error(f"Import error: {e}")
     st.error("Please make sure the plot_digitizer package is properly installed.")
+    st.error("For Streamlit Cloud, make sure you're using opencv-python-headless.")
+    st.stop()
+except Exception as e:
+    st.error(f"OpenCV initialization error: {e}")
+    st.error("This might be a system-level dependency issue.")
     st.stop()
 
 # Page config
@@ -48,6 +62,19 @@ def main():
     # Header
     st.title("📊 AutoPlot-Digitizer")
     st.markdown("**Automated plot digitizer for scientific papers and research data extraction**")
+
+    # Show system info in debug mode
+    if st.session_state.get('debug_mode', False):
+        import platform
+        st.sidebar.write(f"Python: {platform.python_version()}")
+        st.sidebar.write(f"Platform: {platform.system()}")
+        try:
+            import cv2
+            st.sidebar.write(f"OpenCV: {cv2.__version__}")
+        except ImportError:
+            st.sidebar.write("OpenCV: Not available")
+
+    # ...existing code...
 
     # Sidebar
     with st.sidebar:
@@ -141,21 +168,21 @@ def extract_data_tab():
                 if results:
                     status_text.text("✨ Creating visualization...")
                     progress_bar.progress(90)
-                    
+
                     # Initialize session state for downloads if not exists
                     if 'download_state' not in st.session_state:
                         st.session_state['download_state'] = {}
-                    
+
                     # Display extraction results visualization
                     display_extraction_visualization(results)
-                    
+
                     progress_bar.progress(100)
                     status_text.text("✅ Extraction completed!")
-                    
+
                     # Store results in session state
                     st.session_state['extraction_results'] = results
                     st.session_state['uploaded_filename'] = uploaded_file.name
-                    
+
                     # Generate unique session key for this extraction
                     import time
                     st.session_state['current_extraction_key'] = f"{int(time.time() * 1000)}_{hash(uploaded_file.name)}"
@@ -381,11 +408,11 @@ def display_quick_summary(results):
 def create_download_buttons(results, filename):
     """Create download buttons for the results"""
     import time
-    
+
     st.subheader("💾 Download Results")
 
     col1, col2 = st.columns(2)
-    
+
     # Use session state extraction key if available, otherwise create unique key
     session_key = st.session_state.get('current_extraction_key', f"{int(time.time() * 1000)}_{hash(filename)}")
 

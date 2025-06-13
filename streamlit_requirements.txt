@@ -9,3 +9,5 @@ scikit-image>=0.22
 pandas>=2.0
 pydantic>=2.6
 matplotlib>=3.7
+typer>=0.9
+matplotlib>=3.7
