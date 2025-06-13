@@ -1,0 +1,54 @@
+@startuml classes_plot_digitizer
+set namespaceSeparator none
+class "AxisCalibrator" as plot_digitizer.interfaces.calibration.AxisCalibrator {
+  {abstract}calibrate(image: np.ndarray) -> Tuple[LinearScale, LinearScale]
+}
+class "ColorMasker" as plot_digitizer.interfaces.color_mask.ColorMasker {
+  {abstract}mask(image: np.ndarray) -> Dict[str, np.ndarray]
+}
+class "DataPoint" as plot_digitizer.domain.entities.DataPoint {
+  series : str
+  x : float
+  y : float
+}
+class "DigitizePlotUseCase" as plot_digitizer.usecases.digitize.DigitizePlotUseCase {
+  cal
+  detector
+  masker
+  execute(image_path: str | Path) -> DigitizeResult
+  to_csv(result: DigitizeResult, out_path: str | Path)
+}
+class "DigitizeResult" as plot_digitizer.domain.entities.DigitizeResult {
+  datapoints : List[DataPoint]
+}
+class "FilledMarkerDetector" as plot_digitizer.infrastructure.opencv_shape_detector.FilledMarkerDetector {
+  eps : float
+  min_samples : int
+  detect(mask: np.ndarray) -> List[Tuple[float, float]]
+}
+class "HSVColorMasker" as plot_digitizer.infrastructure.opencv_color_mask.HSVColorMasker {
+  mask(image: np.ndarray) -> Dict[str, np.ndarray]
+}
+class "LinearScale" as plot_digitizer.domain.value_objects.LinearScale {
+  pixel_end : float
+  pixel_start : float
+  value_end : float
+  value_start : float
+  pixel_to_value(px: float) -> float
+}
+class "OpenCVAxisCalibrator" as plot_digitizer.infrastructure.opencv_calibration.OpenCVAxisCalibrator {
+  calibrate(image: np.ndarray) -> Tuple[LinearScale, LinearScale]
+}
+class "PlotImage" as plot_digitizer.domain.entities.PlotImage {
+  image_path : str
+}
+class "ShapeDetector" as plot_digitizer.interfaces.shape_detector.ShapeDetector {
+  {abstract}detect(mask: np.ndarray) -> List[Tuple[float, float]]
+}
+plot_digitizer.infrastructure.opencv_calibration.OpenCVAxisCalibrator --|> plot_digitizer.interfaces.calibration.AxisCalibrator
+plot_digitizer.infrastructure.opencv_color_mask.HSVColorMasker --|> plot_digitizer.interfaces.color_mask.ColorMasker
+plot_digitizer.infrastructure.opencv_shape_detector.FilledMarkerDetector --|> plot_digitizer.interfaces.shape_detector.ShapeDetector
+plot_digitizer.interfaces.calibration.AxisCalibrator --o plot_digitizer.usecases.digitize.DigitizePlotUseCase : cal
+plot_digitizer.interfaces.color_mask.ColorMasker --o plot_digitizer.usecases.digitize.DigitizePlotUseCase : masker
+plot_digitizer.interfaces.shape_detector.ShapeDetector --o plot_digitizer.usecases.digitize.DigitizePlotUseCase : detector
+@enduml

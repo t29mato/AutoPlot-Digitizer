@@ -1,0 +1,55 @@
+@startuml packages_plot_digitizer
+set namespaceSeparator none
+package "plot_digitizer" as plot_digitizer {
+}
+package "plot_digitizer.cli" as plot_digitizer.cli {
+}
+package "plot_digitizer.domain" as plot_digitizer.domain {
+}
+package "plot_digitizer.domain.entities" as plot_digitizer.domain.entities {
+}
+package "plot_digitizer.domain.value_objects" as plot_digitizer.domain.value_objects {
+}
+package "plot_digitizer.infrastructure" as plot_digitizer.infrastructure {
+}
+package "plot_digitizer.infrastructure.opencv_calibration" as plot_digitizer.infrastructure.opencv_calibration {
+}
+package "plot_digitizer.infrastructure.opencv_color_mask" as plot_digitizer.infrastructure.opencv_color_mask {
+}
+package "plot_digitizer.infrastructure.opencv_shape_detector" as plot_digitizer.infrastructure.opencv_shape_detector {
+}
+package "plot_digitizer.interfaces" as plot_digitizer.interfaces {
+}
+package "plot_digitizer.interfaces.calibration" as plot_digitizer.interfaces.calibration {
+}
+package "plot_digitizer.interfaces.color_mask" as plot_digitizer.interfaces.color_mask {
+}
+package "plot_digitizer.interfaces.shape_detector" as plot_digitizer.interfaces.shape_detector {
+}
+package "plot_digitizer.usecases" as plot_digitizer.usecases {
+}
+package "plot_digitizer.usecases.digitize" as plot_digitizer.usecases.digitize {
+}
+package "plot_digitizer.utils" as plot_digitizer.utils {
+}
+package "plot_digitizer.utils.clustering" as plot_digitizer.utils.clustering {
+}
+package "plot_digitizer.utils.image_io" as plot_digitizer.utils.image_io {
+}
+plot_digitizer --> plot_digitizer.interfaces.shape_detector
+plot_digitizer.cli --> plot_digitizer
+plot_digitizer.cli --> plot_digitizer.infrastructure.opencv_calibration
+plot_digitizer.cli --> plot_digitizer.infrastructure.opencv_color_mask
+plot_digitizer.cli --> plot_digitizer.usecases.digitize
+plot_digitizer.infrastructure.opencv_calibration --> plot_digitizer.domain.value_objects
+plot_digitizer.infrastructure.opencv_calibration --> plot_digitizer.interfaces.calibration
+plot_digitizer.infrastructure.opencv_color_mask --> plot_digitizer.interfaces.color_mask
+plot_digitizer.infrastructure.opencv_shape_detector --> plot_digitizer
+plot_digitizer.infrastructure.opencv_shape_detector --> plot_digitizer.interfaces.shape_detector
+plot_digitizer.interfaces.calibration --> plot_digitizer.domain.value_objects
+plot_digitizer.usecases.digitize --> plot_digitizer.domain.entities
+plot_digitizer.usecases.digitize --> plot_digitizer.interfaces.calibration
+plot_digitizer.usecases.digitize --> plot_digitizer.interfaces.color_mask
+plot_digitizer.usecases.digitize --> plot_digitizer.interfaces.shape_detector
+plot_digitizer.usecases.digitize --> plot_digitizer.utils.image_io
+@enduml
