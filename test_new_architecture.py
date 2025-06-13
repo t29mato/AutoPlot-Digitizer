@@ -22,8 +22,9 @@ def test_new_architecture():
     try:
         print("🧪 Testing new Clean Architecture implementation...")
 
-        # Create extractor (infrastructure layer)
-        extractor = OpenCVPlotExtractor()
+        # Create extractor with calibration settings (infrastructure layer)
+        # Example: assuming your plot has X from 0-600 and Y from 0-6
+        extractor = OpenCVPlotExtractor(x_range=(0, 600), y_range=(0, 6))
 
         # Create use case (application layer)
         use_case = ExtractPlotsUseCase(extractor)

@@ -95,17 +95,17 @@ def extract_data_tab():
 
     # File upload
     uploaded_file = st.file_uploader(
-        "Choose an image file",
+        "📎 Drop your graph image here or click to browse",
         type=['png', 'jpg', 'jpeg', 'pdf'],
-        help="Upload a scientific plot image for data extraction"
+        help="Supported formats: PNG, JPG, JPEG, PDF. Processing starts automatically after upload."
     )
 
     if uploaded_file is not None:
-        # Display uploaded image
-        col1, col2 = st.columns([2, 1])
+        # Create 2 columns for original and result
+        col1, col2 = st.columns(2)
 
         with col1:
-            st.subheader("📋 Uploaded Image")
+            st.subheader("📋 Original Image")
             if uploaded_file.type.startswith('image'):
                 image = Image.open(uploaded_file)
                 st.image(image, caption="Uploaded Plot", use_column_width=True)
@@ -113,18 +113,66 @@ def extract_data_tab():
                 st.info("PDF uploaded - will process first page")
 
         with col2:
-            st.subheader("⚙️ Processing Options")
+            st.subheader("🎯 Extraction Results")
 
-            # Processing note
-            st.info("📄 Both JSON and CSV formats will be available for download")
+            # Progress indicator
+            progress_bar = st.progress(0)
+            status_text = st.empty()
 
-            process_button = st.button(
-                "🔄 Extract Data",
-                type="primary",
-                use_container_width=True
-            )
+            # Automatically start processing
+            try:
+                status_text.text("🔍 Analyzing image...")
+                progress_bar.progress(25)
 
-        if process_button:
+                # Show debug info if enabled
+                if st.session_state.get('debug_mode', False):
+                    st.write(f"📁 File name: {uploaded_file.name}")
+                    st.write(f"� File size: {len(uploaded_file.getvalue())} bytes")
+
+                status_text.text("📊 Detecting plots...")
+                progress_bar.progress(50)
+
+                # Process the image
+                results = process_plot(uploaded_file)
+
+                status_text.text("🎨 Extracting data points...")
+                progress_bar.progress(75)
+
+                if results:
+                    status_text.text("✨ Creating visualization...")
+                    progress_bar.progress(90)
+                    
+                    # Initialize session state for downloads if not exists
+                    if 'download_state' not in st.session_state:
+                        st.session_state['download_state'] = {}
+                    
+                    # Display extraction results visualization
+                    display_extraction_visualization(results)
+                    
+                    progress_bar.progress(100)
+                    status_text.text("✅ Extraction completed!")
+                    
+                    # Store results in session state
+                    st.session_state['extraction_results'] = results
+                    st.session_state['uploaded_filename'] = uploaded_file.name
+                    
+                    # Generate unique session key for this extraction
+                    import time
+                    st.session_state['current_extraction_key'] = f"{int(time.time() * 1000)}_{hash(uploaded_file.name)}"
+                else:
+                    st.warning("⚠️ No plots detected in the image. Please try with a clearer graph image.")
+                    progress_bar.progress(100)
+                    status_text.text("❌ No data extracted")
+
+            except Exception as e:
+                st.error(f"❌ Error during extraction: {str(e)}")
+                progress_bar.progress(100)
+                status_text.text("❌ Extraction failed")
+                if st.session_state.get('debug_mode', False):
+                    st.exception(e)
+
+        # Display detailed results below if extraction was successful
+        if 'extraction_results' in st.session_state and st.session_state['extraction_results']:
             # Show debug info if enabled
             if st.session_state.get('debug_mode', False):
                 st.write(f"📁 File name: {uploaded_file.name}")
@@ -144,8 +192,75 @@ def extract_data_tab():
                 # Display quick summary
                 display_quick_summary(results)
 
+                st.markdown("---")
+                st.subheader("📋 Extraction Details")
+
+                # Display detailed results
+                display_detailed_results(st.session_state['extraction_results'])
+
                 # Download buttons
-                create_download_buttons(results, uploaded_file.name)
+                create_download_buttons(st.session_state['extraction_results'], st.session_state['uploaded_filename'])
+
+    else:
+        # Show help when no file is uploaded
+        st.info("👆 Please upload a graph image to start the automatic extraction process")
+
+        # Usage instructions
+        with st.expander("📖 How to use"):
+            st.markdown("""
+            1. **Upload Image**: Click the file uploader above and select a graph image
+            2. **Automatic Processing**: The system will automatically:
+               - Detect plots in your image
+               - Extract data points from each plot
+               - Calibrate coordinates to actual axis values
+               - Display results alongside the original image
+            3. **View Results**: Check the extracted points and download as JSON/CSV
+
+            **Supported formats**: PNG, JPG, JPEG, PDF
+
+            **Best results with**:
+            - Clear, high-contrast graphs
+            - Visible axis labels and grid lines
+            - Distinct colors for different data series
+            """)
+
+def display_detailed_results(results):
+    """Display detailed extraction results"""
+    for plot_idx, plot in enumerate(results['plots']):
+        with st.expander(f"📊 Plot {plot_idx} Details", expanded=True):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.write("**Plot Information:**")
+                st.write(f"- X-axis: {plot['x_axis']['label'] or 'Not detected'}")
+                st.write(f"- Y-axis: {plot['y_axis']['label'] or 'Not detected'}")
+                st.write(f"- Total Series: {len(plot['series'])}")
+                st.write(f"- Total Points: {sum(len(s['points']) for s in plot['series'])}")
+
+            with col2:
+                # Color/series breakdown
+                st.write("**Series Breakdown:**")
+                for series in plot['series']:
+                    point_count = len(series['points'])
+                    st.write(f"- {series['sample']}: {point_count} points")
+
+            # Sample points preview
+            if plot['series']:
+                st.write("**Sample Points (Calibrated Coordinates):**")
+                sample_data = []
+
+                for series in plot['series'][:3]:  # Show first 3 series
+                    for i, point in enumerate(series['points'][:3]):  # Show first 3 points
+                        sample_data.append({
+                            'Series': series['sample'],
+                            'Point': i + 1,
+                            'X': round(point[0], 3),
+                            'Y': round(point[1], 3)
+                        })
+
+                if sample_data:
+                    df = pd.DataFrame(sample_data)
+                    st.dataframe(df, use_container_width=True)
 
 def create_temp_file_from_upload(uploaded_file):
     """Create a temporary file from uploaded file"""
@@ -187,29 +302,48 @@ def cleanup_temp_files(*paths):
                 pass  # Ignore cleanup errors
 
 def process_plot(uploaded_file):
-    """Process the uploaded plot file"""
+    """Process the uploaded plot file using new architecture"""
     tmp_path = None
-    output_path = None
 
     try:
-        # Create temporary files
+        # Create temporary file
         tmp_path = create_temp_file_from_upload(uploaded_file)
-        output_fd, output_path = tempfile.mkstemp(suffix='.json')
-        os.close(output_fd)  # Close file descriptor, we'll use the path
 
-        # Process the image
-        extractor = OpenCVPlotExtractor()
-        use_case = ExtractPlotsUseCase(extractor)
+        # Process the image with calibrated coordinates (UI version uses calibrated)
+        extractor = OpenCVPlotExtractor(x_range=(0, 600), y_range=(0, 6))
 
-        # Execute extraction with progress feedback
-        with st.spinner("Processing image..."):
-            use_case.execute(tmp_path, output_path)
+        # Execute extraction directly
+        results = extractor.extract(tmp_path)
 
-        # Read results
-        with open(output_path, 'r') as f:
-            results = json.load(f)
+        # Convert to dictionary format for JSON serialization
+        results_dict = {
+            "plots": []
+        }
 
-        return results
+        for plot in results.plots:
+            plot_dict = {
+                "id": plot.id,
+                "x_axis": {
+                    "label": plot.x_axis.label,
+                    "unit": plot.x_axis.unit
+                },
+                "y_axis": {
+                    "label": plot.y_axis.label,
+                    "unit": plot.y_axis.unit
+                },
+                "series": []
+            }
+
+            for series in plot.series:
+                series_dict = {
+                    "sample": series.sample,
+                    "points": series.points
+                }
+                plot_dict["series"].append(series_dict)
+
+            results_dict["plots"].append(plot_dict)
+
+        return results_dict
 
     except Exception as e:
         st.error(f"Error processing plot: {str(e)}")
@@ -223,7 +357,7 @@ def process_plot(uploaded_file):
 
     finally:
         # Clean up temporary files
-        cleanup_temp_files(tmp_path, output_path)
+        cleanup_temp_files(tmp_path)
 
 def display_quick_summary(results):
     """Display a quick summary of extraction results"""
@@ -246,9 +380,14 @@ def display_quick_summary(results):
 
 def create_download_buttons(results, filename):
     """Create download buttons for the results"""
+    import time
+    
     st.subheader("💾 Download Results")
 
     col1, col2 = st.columns(2)
+    
+    # Use session state extraction key if available, otherwise create unique key
+    session_key = st.session_state.get('current_extraction_key', f"{int(time.time() * 1000)}_{hash(filename)}")
 
     # JSON download
     with col1:
@@ -258,7 +397,8 @@ def create_download_buttons(results, filename):
             data=json_str,
             file_name=f"{Path(filename).stem}_extracted.json",
             mime="application/json",
-            use_container_width=True
+            use_container_width=True,
+            key=f"download_json_{session_key}"
         )
 
     # CSV download
@@ -269,7 +409,8 @@ def create_download_buttons(results, filename):
             data=csv_data,
             file_name=f"{Path(filename).stem}_extracted.csv",
             mime="text/csv",
-            use_container_width=True
+            use_container_width=True,
+            key=f"download_csv_{session_key}"
         )
 
 def convert_to_csv(results):
@@ -480,11 +621,14 @@ def create_enhanced_plot_visualization(plot_data, plot_type, show_grid, show_leg
         plt.savefig(buf, format='png', dpi=300, bbox_inches='tight', facecolor='white')
         buf.seek(0)
 
+        import time
+        timestamp = int(time.time() * 1000)
         st.download_button(
             label="📸 Save Plot Image",
             data=buf.getvalue(),
             file_name=f"extracted_plot_{plot_data.get('id', 0)}.png",
-            mime="image/png"
+            mime="image/png",
+            key=f"download_plot_image_{plot_data.get('id', 0)}_{timestamp}"
         )
         plt.close(fig)
     else:
@@ -646,6 +790,44 @@ Plot_ID,Series,X,Y,X_Label,X_Unit,Y_Label,Y_Unit
 0,Sample-1,300.0,2.1,Temperature,K,Thermal Conductivity,W/mK
 0,Sample-1,350.0,1.8,Temperature,K,Thermal Conductivity,W/mK
     """, language="csv")
+
+def display_extraction_visualization(results):
+    """Display extraction results visualization"""
+    if not results or 'plots' not in results:
+        st.warning("No visualization data available")
+        return
+
+    # Create visualization for each plot
+    for plot_idx, plot in enumerate(results['plots']):
+        if plot['series']:
+            # Create matplotlib figure
+            fig, ax = plt.subplots(figsize=(8, 6))
+
+            # Plot each series
+            colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
+
+            for series_idx, series in enumerate(plot['series']):
+                if series['points']:
+                    x_coords = [point[0] for point in series['points']]
+                    y_coords = [point[1] for point in series['points']]
+
+                    color = colors[series_idx % len(colors)]
+                    ax.scatter(x_coords, y_coords,
+                             c=color, alpha=0.7, s=30,
+                             label=f"{series['sample']} ({len(series['points'])} pts)")
+
+            ax.set_title(f'Plot {plot_idx} - Extracted Data (Calibrated)')
+            ax.set_xlabel('X Value')
+            ax.set_ylabel('Y Value')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+
+            st.pyplot(fig)
+            plt.close(fig)
+
+            # Show summary statistics
+            total_points = sum(len(s['points']) for s in plot['series'])
+            st.success(f"✅ Plot {plot_idx}: {len(plot['series'])} series, {total_points} points extracted")
 
 if __name__ == "__main__":
     main()

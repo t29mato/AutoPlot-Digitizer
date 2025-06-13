@@ -163,3 +163,6 @@ output/
 # OS specific
 .DS_Store
 Thumbs.db
+
+test_data/
+output/
