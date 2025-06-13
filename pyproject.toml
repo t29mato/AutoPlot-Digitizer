@@ -3,20 +3,33 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "plot-digitizer"
-version = "0.1.0"
-description = "Extract XY data points from static 2-D scientific plots"
+name = "autoplot-digitizer"
+version = "0.0.1"
+description = "Automated plot digitizer for scientific papers and research data extraction"
 readme = "README.md"
 requires-python = ">=3.9"
+authors = [
+    {name = "t29mato", email = "t29mato@example.com"},
+]
+maintainers = [
+    {name = "t29mato", email = "t29mato@example.com"},
+]
+license = {text = "MIT"}
+keywords = ["autoplot", "digitizer", "data-extraction", "computer-vision", "ocr", "scientific-plots", "automation", "research"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
     "opencv-python>=4.6",
@@ -25,10 +38,36 @@ dependencies = [
     "numpy>=1.24",
     "pandas>=1.5",
     "typer>=0.9.0",
+    "pillow>=9.0",
+    "pytesseract>=0.3.10",
+    "pydantic>=2.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "isort>=5.12",
+    "flake8>=6.0",
+    "mypy>=1.0",
+]
+plotting = [
+    "matplotlib>=3.5",
+]
+ui = [
+    "streamlit>=1.28",
+    "matplotlib>=3.7",
+]
+
+[project.urls]
+Homepage = "https://github.com/t29mato/autoplot-digitizer"
+Documentation = "https://github.com/t29mato/autoplot-digitizer#readme"
+Repository = "https://github.com/t29mato/autoplot-digitizer.git"
+"Bug Tracker" = "https://github.com/t29mato/autoplot-digitizer/issues"
+
 [project.scripts]
-plot-digitizer = "plot_digitizer.cli:app"
+autoplot-digitizer = "plot_digitizer.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
