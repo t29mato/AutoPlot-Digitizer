@@ -74,8 +74,6 @@ def main():
         except ImportError:
             st.sidebar.write("OpenCV: Not available")
 
-    # ...existing code...
-
     # Sidebar
     with st.sidebar:
         st.header("🎯 Features")
@@ -105,16 +103,34 @@ def main():
         st.header("🔧 Debug")
         st.session_state['debug_mode'] = st.checkbox("Enable debug mode", False)
 
+        if st.button("🔄 Clear Cache & Reload"):
+            st.cache_data.clear()
+            st.rerun()
+
+        # Module debug info
+        if st.session_state.get('debug_mode', False):
+            try:
+                from plot_digitizer.infrastructure.extractor_impl import OpenCVPlotExtractor
+                test_extractor = OpenCVPlotExtractor()
+                st.write(f"✅ Extractor import: OK")
+                st.write(f"✅ Has get_detection_results: {hasattr(test_extractor, 'get_detection_results')}")
+                st.write(f"✅ Available methods: {[m for m in dir(test_extractor) if 'detection' in m]}")
+            except Exception as e:
+                st.write(f"❌ Import error: {e}")
+
     # Main interface
-    tab1, tab2, tab3 = st.tabs(["🚀 Extract Data", "📊 View Results", "💡 Examples"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🚀 Extract Data", "� Detection Analysis", "�📊 View Results", "💡 Examples"])
 
     with tab1:
         extract_data_tab()
 
     with tab2:
-        view_results_tab()
+        detection_analysis_tab()
 
     with tab3:
+        view_results_tab()
+
+    with tab4:
         examples_tab()
 
 def extract_data_tab():
@@ -336,11 +352,42 @@ def process_plot(uploaded_file):
         # Create temporary file
         tmp_path = create_temp_file_from_upload(uploaded_file)
 
+        # Force module reload to ensure we have the latest version
+        import importlib
+        import plot_digitizer.infrastructure.extractor_impl
+        importlib.reload(plot_digitizer.infrastructure.extractor_impl)
+
         # Process the image with calibrated coordinates (UI version uses calibrated)
         extractor = OpenCVPlotExtractor(x_range=(0, 600), y_range=(0, 6))
 
         # Execute extraction directly
         results = extractor.extract(tmp_path)
+
+        # Get detection results for visualization
+        try:
+            detection_results = extractor.get_detection_results()
+        except AttributeError as e:
+            st.error(f"Detection results method not available: {e}")
+            # Fallback - continue without visualization
+            detection_results = {}
+
+        # Create visualization images
+        import cv2
+        original_image = cv2.imread(tmp_path)
+        if original_image is not None and detection_results:
+            try:
+                detection_visualization = extractor.create_detection_visualization(original_image)
+                detection_overview = extractor.create_detection_overview(original_image)
+
+                # Store in session state for the analysis tab
+                st.session_state['detection_results'] = detection_results
+                st.session_state['detection_visualization'] = detection_visualization
+                st.session_state['detection_overview'] = detection_overview
+            except Exception as viz_e:
+                st.warning(f"Could not create visualizations: {viz_e}")
+                # Continue without visualization
+                if st.session_state.get('debug_mode', False):
+                    st.exception(viz_e)
 
         # Convert to dictionary format for JSON serialization
         results_dict = {
@@ -385,6 +432,98 @@ def process_plot(uploaded_file):
     finally:
         # Clean up temporary files
         cleanup_temp_files(tmp_path)
+
+def detection_analysis_tab():
+    """Tab for analyzing detection results step by step"""
+    st.header("🔍 Detection Analysis")
+
+    # Check if we have recent extraction results with detection data
+    if ('extraction_results' not in st.session_state or
+        'detection_visualization' not in st.session_state):
+        st.info("👆 Upload and process a plot in the 'Extract Data' tab first to see detection analysis!")
+        return
+
+    st.markdown("""
+    This analysis shows the step-by-step detection process to help you understand
+    how the system identified different elements in your graph.
+    """)
+
+    detection_viz = st.session_state['detection_visualization']
+
+    # Create tabs for different detection steps
+    step_tabs = st.tabs([
+        "1️⃣ Original",
+        "2️⃣ Plot Area",
+        "3️⃣ Axis Detection",
+        "4️⃣ Data Points",
+        "5️⃣ Complete Overview"
+    ])
+
+    step_names = ['1_original', '2_plot_area', '3_axis_detection', '4_data_points', '5_complete']
+    step_descriptions = [
+        "Original uploaded image",
+        "Detected plot area boundaries (green rectangle shows the actual data plotting region)",
+        "Detected axis lines (blue for Y-axis, red for X-axis)",
+        "Extracted data points (different colors for different data series)",
+        "Complete overview with all detected elements"
+    ]
+
+    for i, (tab, step_key, description) in enumerate(zip(step_tabs, step_names, step_descriptions)):
+        with tab:
+            st.markdown(f"**{description}**")
+
+            if step_key in detection_viz:
+                # Convert BGR to RGB for display
+                viz_image = detection_viz[step_key]
+                if len(viz_image.shape) == 3 and viz_image.shape[2] == 3:
+                    viz_image_rgb = cv2.cvtColor(viz_image, cv2.COLOR_BGR2RGB)
+                else:
+                    viz_image_rgb = viz_image
+
+                st.image(viz_image_rgb, caption=f"Step {i+1}: {description}", use_column_width=True)
+
+                # Add specific information for each step
+                detection_results = st.session_state.get('detection_results', {})
+
+                if step_key == '2_plot_area' and 'plot_area' in detection_results:
+                    plot_area = detection_results['plot_area']
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Plot Width", f"{plot_area['plot_right'] - plot_area['plot_left']} px")
+                        st.metric("Plot Height", f"{plot_area['plot_bottom'] - plot_area['plot_top']} px")
+                    with col2:
+                        st.metric("Left Margin", f"{plot_area['plot_left']} px")
+                        st.metric("Bottom Margin", f"{plot_area['full_height'] - plot_area['plot_bottom']} px")
+
+                elif step_key == '3_axis_detection':
+                    v_lines = detection_results.get('vertical_lines', [])
+                    h_lines = detection_results.get('horizontal_lines', [])
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Vertical Lines Detected", len(v_lines))
+                        if v_lines:
+                            st.write("Positions:", v_lines)
+                    with col2:
+                        st.metric("Horizontal Lines Detected", len(h_lines))
+                        if h_lines:
+                            st.write("Positions:", h_lines)
+
+                elif step_key == '4_data_points' and 'data_points' in detection_results:
+                    data_points = detection_results['data_points']
+                    st.subheader("📊 Data Points Summary")
+
+                    for series_name, points in data_points.items():
+                        col1, col2 = st.columns([1, 3])
+                        with col1:
+                            st.metric(f"Series: {series_name}", f"{len(points)} points")
+                        with col2:
+                            if len(points) > 0:
+                                x_coords = [p[0] for p in points]
+                                y_coords = [p[1] for p in points]
+                                st.write(f"X range: {min(x_coords):.1f} - {max(x_coords):.1f} px")
+                                st.write(f"Y range: {min(y_coords):.1f} - {max(y_coords):.1f} px")
+            else:
+                st.warning(f"Visualization for step {i+1} not available")
 
 def display_quick_summary(results):
     """Display a quick summary of extraction results"""
