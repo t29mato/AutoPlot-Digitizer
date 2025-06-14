@@ -494,6 +494,21 @@ def detection_analysis_tab():
                     with col2:
                         st.metric("Left Margin", f"{plot_area['plot_left']} px")
                         st.metric("Bottom Margin", f"{plot_area['full_height'] - plot_area['plot_bottom']} px")
+                    
+                    # Show border detection info
+                    if 'detected_border' in detection_results:
+                        border = detection_results['detected_border']
+                        if border:
+                            st.success("✅ Plot border detected successfully")
+                            st.write(f"Border coordinates: ({border['left']}, {border['top']}) to ({border['right']}, {border['bottom']})")
+                        else:
+                            st.warning("⚠️ No plot border detected, using default margins")
+                    
+                    # Show axis ticks info
+                    if 'axis_ticks' in detection_results:
+                        ticks = detection_results['axis_ticks']
+                        if ticks.get('x_ticks') or ticks.get('y_ticks'):
+                            st.info(f"📏 Detected {len(ticks.get('x_ticks', []))} X-axis ticks, {len(ticks.get('y_ticks', []))} Y-axis ticks")
 
                 elif step_key == '3_axis_detection':
                     v_lines = detection_results.get('vertical_lines', [])

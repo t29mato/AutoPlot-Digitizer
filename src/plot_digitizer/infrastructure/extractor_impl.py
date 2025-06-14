@@ -67,13 +67,92 @@ class OpenCVPlotExtractor(IPlotExtractor):
             'y_data_range': (y_data_min, y_data_max)
         }
 
-    def _get_default_margins(self, width, height):
-        """Get default plot area margins"""
+    def _detect_plot_border(self, gray_image):
+        """Detect the rectangular border that surrounds the plot area"""
+        h, w = gray_image.shape
+
+        # Apply edge detection to find borders
+        edges = cv2.Canny(gray_image, 50, 150, apertureSize=3)
+
+        # Find contours that could be plot borders
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Look for rectangular contours that could be plot borders
+        border_candidates = []
+        for contour in contours:
+            # Approximate contour to polygon
+            epsilon = 0.02 * cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, epsilon, True)
+
+            # Check if it's roughly rectangular (4 corners)
+            if len(approx) >= 4:
+                x, y, cw, ch = cv2.boundingRect(contour)
+                area = cw * ch
+
+                # Filter by size - should be a significant portion of the image
+                if area > 0.1 * w * h and cw > 0.3 * w and ch > 0.3 * h:
+                    border_candidates.append((x, y, x + cw, y + ch, area))
+
+        # Select the largest rectangular border
+        if border_candidates:
+            # Sort by area and take the largest
+            border_candidates.sort(key=lambda x: x[4], reverse=True)
+            best_border = border_candidates[0]
+            return {
+                'left': best_border[0],
+                'top': best_border[1],
+                'right': best_border[2],
+                'bottom': best_border[3]
+            }
+
+        return None
+
+    def _detect_axis_ticks(self, gray_image, border):
+        """Detect axis tick marks outside the plot border"""
+        _, _ = gray_image.shape
+
+        # Define regions to look for ticks
+        left_region = gray_image[:, :border['left']]  # Left of plot for Y-axis
+        bottom_region = gray_image[border['bottom']:, :]  # Below plot for X-axis
+
+        # Detect horizontal lines (Y-axis ticks) in left region
+        y_ticks = []
+        if left_region.shape[1] > 0:
+            edges_left = cv2.Canny(left_region, 30, 100)
+            lines_left = cv2.HoughLinesP(edges_left, 1, np.pi/180, threshold=20,
+                                        minLineLength=5, maxLineGap=2)
+            if lines_left is not None:
+                for line in lines_left:
+                    x1, y1, x2, y2 = line[0]
+                    # Check if line is roughly horizontal (Y-axis tick)
+                    if abs(y1 - y2) < 5 and abs(x1 - x2) > 3:
+                        y_ticks.append(y1)
+
+        # Detect vertical lines (X-axis ticks) in bottom region
+        x_ticks = []
+        if bottom_region.shape[0] > 0:
+            edges_bottom = cv2.Canny(bottom_region, 30, 100)
+            lines_bottom = cv2.HoughLinesP(edges_bottom, 1, np.pi/180, threshold=20,
+                                          minLineLength=5, maxLineGap=2)
+            if lines_bottom is not None:
+                for line in lines_bottom:
+                    x1, y1, x2, y2 = line[0]
+                    # Check if line is roughly vertical (X-axis tick)
+                    if abs(x1 - x2) < 5 and abs(y1 - y2) > 3:
+                        x_ticks.append(x1)
+
         return {
-            'left': int(0.12 * width),     # Space for Y-axis labels
-            'right': int(0.25 * width),    # Larger margin for legends on the right
-            'top': int(0.08 * height),     # Small margin for titles
-            'bottom': int(0.15 * height)   # Space for X-axis labels
+            'y_ticks': sorted(set(y_ticks)),
+            'x_ticks': sorted(set(x_ticks))
+        }
+
+    def _get_default_margins(self, width, height):
+        """Get default plot area margins - more conservative for typical scientific plots"""
+        return {
+            'left': int(0.08 * width),     # Minimal space for Y-axis labels
+            'right': int(0.05 * width),    # Minimal right margin
+            'top': int(0.05 * height),     # Minimal top margin
+            'bottom': int(0.08 * height)   # Minimal space for X-axis labels
         }
 
     def _detect_axis_lines(self, gray_image):
@@ -82,11 +161,11 @@ class OpenCVPlotExtractor(IPlotExtractor):
             # Apply Gaussian blur to reduce noise
             blurred = cv2.GaussianBlur(gray_image, (3, 3), 0)
 
-            # Use more sensitive edge detection for axis lines
-            edges = cv2.Canny(blurred, 30, 100, apertureSize=3)
+            # Use adaptive edge detection
+            edges = cv2.Canny(blurred, 50, 150, apertureSize=3)
 
-            # Use more permissive parameters for Hough line detection
-            lines = cv2.HoughLines(edges, 1, np.pi/180, threshold=50)
+            # More aggressive line detection for axis lines
+            lines = cv2.HoughLines(edges, 1, np.pi/180, threshold=30)
             return lines
         except Exception:
             # If cv2 is not available or operations fail, return None
@@ -245,73 +324,50 @@ class OpenCVPlotExtractor(IPlotExtractor):
         }
 
     def _detect_plot_area(self, plot_img):
-        """Detect the actual plot area excluding axis labels and legends"""
+        """Detect the actual plot area by finding the border and axis ticks"""
         h, w = plot_img.shape[:2]
+        gray = cv2.cvtColor(plot_img, cv2.COLOR_BGR2GRAY)
 
-        # Get default margins
-        default_margins = self._get_default_margins(w, h)
+        # Try to detect plot border first
+        border = self._detect_plot_border(gray)
 
-        # Try content-based boundary detection
-        try:
-            content_bounds = self._detect_plot_boundaries_by_content(plot_img)
-        except Exception:
-            content_bounds = None
+        if border:
+            # Use detected border as plot area
+            plot_area = {
+                'plot_left': border['left'],
+                'plot_right': border['right'],
+                'plot_top': border['top'],
+                'plot_bottom': border['bottom'],
+                'full_width': w,
+                'full_height': h
+            }
 
-        # Try to detect axis lines (gracefully handle cv2 import issues)
-        vertical_lines = []
-        horizontal_lines = []
-        try:
-            gray = cv2.cvtColor(plot_img, cv2.COLOR_BGR2GRAY)
-            lines = self._detect_axis_lines(gray)
-            vertical_lines, horizontal_lines = self._classify_lines(lines, w, h)
-            left_margin, bottom_margin = self._refine_margins_with_lines(
-                default_margins, vertical_lines, horizontal_lines, h
-            )
-        except Exception:
-            # Fall back to default margins if cv2 operations fail
-            left_margin = default_margins['left']
-            bottom_margin = default_margins['bottom']
+            # Try to detect axis ticks for validation
+            try:
+                ticks = self._detect_axis_ticks(gray, border)
+                # Store tick information for visualization
+                self._detection_results['axis_ticks'] = ticks
+            except Exception:
+                pass
 
-        # Detect legend area to adjust plot boundaries
-        legend_left_bound = self._detect_legend_area_bounds(plot_img)
-
-        # Combine different detection methods for more accurate boundaries
-        if content_bounds:
-            # Use content-based detection as primary, but ensure reasonable margins
-            plot_left = max(left_margin, content_bounds['plot_left'])
-            plot_top = max(default_margins['top'], content_bounds['plot_top'])
-            plot_bottom = min(h - bottom_margin, content_bounds['plot_bottom'])
-
-            # For right boundary, prefer legend detection if available
-            if legend_left_bound < w * 0.9:
-                plot_right = legend_left_bound - 10
-            else:
-                plot_right = min(content_bounds['plot_right'], w - default_margins['right'])
         else:
-            # Fallback to margin-based detection
-            plot_left = left_margin
-            plot_top = default_margins['top']
-            plot_bottom = h - bottom_margin
-
-            if legend_left_bound < w * 0.9:
-                plot_right = legend_left_bound - 10
-            else:
-                plot_right = w - default_margins['right']
-
-        plot_area = {
-            'plot_left': plot_left,
-            'plot_right': plot_right,
-            'plot_top': plot_top,
-            'plot_bottom': plot_bottom,
-            'full_width': w,
-            'full_height': h
-        }
+            # Fallback to conservative margin-based detection
+            default_margins = self._get_default_margins(w, h)
+            plot_area = {
+                'plot_left': default_margins['left'],
+                'plot_right': w - default_margins['right'],
+                'plot_top': default_margins['top'],
+                'plot_bottom': h - default_margins['bottom'],
+                'full_width': w,
+                'full_height': h
+            }
 
         # Store detection results for visualization
         self._detection_results.update({
             'plot_area': plot_area,
-            'vertical_lines': vertical_lines,
-            'horizontal_lines': horizontal_lines
+            'detected_border': border,
+            'vertical_lines': [],  # Will be populated by axis detection if successful
+            'horizontal_lines': []
         })
 
         return plot_area
