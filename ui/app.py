@@ -119,18 +119,15 @@ def main():
                 st.write(f"❌ Import error: {e}")
 
     # Main interface
-    tab1, tab2, tab3, tab4 = st.tabs(["🚀 Extract Data", "� Detection Analysis", "�📊 View Results", "💡 Examples"])
+    tab1, tab2, tab3 = st.tabs(["🚀 Extract Data", "📊 View Results", "💡 Examples"])
 
     with tab1:
         extract_data_tab()
 
     with tab2:
-        detection_analysis_tab()
-
-    with tab3:
         view_results_tab()
 
-    with tab4:
+    with tab3:
         examples_tab()
 
 def extract_data_tab():
@@ -440,116 +437,6 @@ def process_plot(uploaded_file):
     finally:
         # Clean up temporary files
         cleanup_temp_files(tmp_path)
-
-def detection_analysis_tab():
-    """Tab for analyzing detection results step by step"""
-    # Import cv2 for image processing
-    import cv2
-
-    st.header("🔍 Detection Analysis")
-
-    # Check if we have recent extraction results with detection data
-    if ('extraction_results' not in st.session_state or
-        'detection_visualization' not in st.session_state):
-        st.info("👆 Upload and process a plot in the 'Extract Data' tab first to see detection analysis!")
-        return
-
-    st.markdown("""
-    This analysis shows the step-by-step detection process to help you understand
-    how the system identified different elements in your graph.
-    """)
-
-    detection_viz = st.session_state['detection_visualization']
-
-    # Create tabs for different detection steps
-    step_tabs = st.tabs([
-        "1️⃣ Original",
-        "2️⃣ Plot Area",
-        "3️⃣ Axis Detection",
-        "4️⃣ Data Points",
-        "5️⃣ Complete Overview"
-    ])
-
-    step_names = ['1_original', '2_plot_area', '3_axis_detection', '4_data_points', '5_complete']
-    step_descriptions = [
-        "Original uploaded image",
-        "Detected plot area boundaries (green rectangle shows the actual data plotting region)",
-        "Detected axis lines (blue for Y-axis, red for X-axis)",
-        "Extracted data points (different colors for different data series)",
-        "Complete overview with all detected elements"
-    ]
-
-    for i, (tab, step_key, description) in enumerate(zip(step_tabs, step_names, step_descriptions)):
-        with tab:
-            st.markdown(f"**{description}**")
-
-            if step_key in detection_viz:
-                # Convert BGR to RGB for display
-                viz_image = detection_viz[step_key]
-                if len(viz_image.shape) == 3 and viz_image.shape[2] == 3:
-                    viz_image_rgb = cv2.cvtColor(viz_image, cv2.COLOR_BGR2RGB)
-                else:
-                    viz_image_rgb = viz_image
-
-                st.image(viz_image_rgb, caption=f"Step {i+1}: {description}", use_column_width=True)
-
-                # Add specific information for each step
-                detection_results = st.session_state.get('detection_results', {})
-
-                if step_key == '2_plot_area' and 'plot_area' in detection_results:
-                    plot_area = detection_results['plot_area']
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Plot Width", f"{plot_area['plot_right'] - plot_area['plot_left']} px")
-                        st.metric("Plot Height", f"{plot_area['plot_bottom'] - plot_area['plot_top']} px")
-                    with col2:
-                        st.metric("Left Margin", f"{plot_area['plot_left']} px")
-                        st.metric("Bottom Margin", f"{plot_area['full_height'] - plot_area['plot_bottom']} px")
-
-                    # Show border detection info
-                    if 'detected_border' in detection_results:
-                        border = detection_results['detected_border']
-                        if border:
-                            st.success("✅ Plot border detected successfully")
-                            st.write(f"Border coordinates: ({border['left']}, {border['top']}) to ({border['right']}, {border['bottom']})")
-                        else:
-                            st.warning("⚠️ No plot border detected, using default margins")
-
-                    # Show axis ticks info
-                    if 'axis_ticks' in detection_results:
-                        ticks = detection_results['axis_ticks']
-                        if ticks.get('x_ticks') or ticks.get('y_ticks'):
-                            st.info(f"📏 Detected {len(ticks.get('x_ticks', []))} X-axis ticks, {len(ticks.get('y_ticks', []))} Y-axis ticks")
-
-                elif step_key == '3_axis_detection':
-                    v_lines = detection_results.get('vertical_lines', [])
-                    h_lines = detection_results.get('horizontal_lines', [])
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Vertical Lines Detected", len(v_lines))
-                        if v_lines:
-                            st.write("Positions:", v_lines)
-                    with col2:
-                        st.metric("Horizontal Lines Detected", len(h_lines))
-                        if h_lines:
-                            st.write("Positions:", h_lines)
-
-                elif step_key == '4_data_points' and 'data_points' in detection_results:
-                    data_points = detection_results['data_points']
-                    st.subheader("📊 Data Points Summary")
-
-                    for series_name, points in data_points.items():
-                        col1, col2 = st.columns([1, 3])
-                        with col1:
-                            st.metric(f"Series: {series_name}", f"{len(points)} points")
-                        with col2:
-                            if len(points) > 0:
-                                x_coords = [p[0] for p in points]
-                                y_coords = [p[1] for p in points]
-                                st.write(f"X range: {min(x_coords):.1f} - {max(x_coords):.1f} px")
-                                st.write(f"Y range: {min(y_coords):.1f} - {max(y_coords):.1f} px")
-            else:
-                st.warning(f"Visualization for step {i+1} not available")
 
 def display_quick_summary(results):
     """Display a quick summary of extraction results"""
@@ -992,163 +879,81 @@ def display_extraction_visualization(results):
     # Create visualization for each plot
     for plot_idx, plot in enumerate(results['plots']):
         if plot['series']:
-            # Create two columns for different visualizations
-            col1, col2 = st.columns(2)
 
-            with col1:
-                st.subheader(f"📊 Plot {plot_idx} - Calibrated Data")
-                # Create matplotlib figure for calibrated data
-                fig, ax = plt.subplots(figsize=(8, 6))
+            display_points_on_original_image()
 
-                # Plot each series
-                colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
+            # Second: Display calibrated data plot
+            fig, ax = plt.subplots(figsize=(8, 6))
 
-                for series_idx, series in enumerate(plot['series']):
-                    if series['points']:
-                        x_coords = [point[0] for point in series['points']]
-                        y_coords = [point[1] for point in series['points']]
+            # Plot each series
+            colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
 
-                        color = colors[series_idx % len(colors)]
-                        ax.scatter(x_coords, y_coords,
-                                 c=color, alpha=0.7, s=30,
-                                 label=f"{series['sample']} ({len(series['points'])} pts)")
+            for series_idx, series in enumerate(plot['series']):
+                if series['points']:
+                    x_coords = [point[0] for point in series['points']]
+                    y_coords = [point[1] for point in series['points']]
 
-                ax.set_title('Extracted Data (Calibrated)')
-                ax.set_xlabel('X Value')
-                ax.set_ylabel('Y Value')
-                ax.legend()
-                ax.grid(True, alpha=0.3)
+                    color = colors[series_idx % len(colors)]
+                    ax.scatter(x_coords, y_coords,
+                                c=color, alpha=0.7, s=30,
+                                label=f"{series['sample']} ({len(series['points'])} pts)")
 
-                st.pyplot(fig)
-                plt.close(fig)
+            ax.set_title('Extracted Data (Calibrated)')
+            ax.set_xlabel('X Value')
+            ax.set_ylabel('Y Value')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
 
-            with col2:
-                st.subheader(f"🎯 Plot {plot_idx} - Points on Original Image")
-                # Display points on original image
-                display_points_on_original_image()
-
-            # Show summary statistics
-            total_points = sum(len(s['points']) for s in plot['series'])
-            st.success(f"✅ Plot {plot_idx}: {len(plot['series'])} series, {total_points} points extracted")
+            st.pyplot(fig)
+            plt.close(fig)
 
 
 def display_points_on_original_image():
     """Display extracted data points overlaid on the original image"""
 
-    # Check if we have the original image stored
-    if 'original_image' not in st.session_state:
-        st.warning("Original image not available. Please re-upload the image.")
-        return
-
-    # Check if we have detection results with pixel coordinates
-    if 'detection_results' not in st.session_state:
-        st.warning("Detection results not available.")
+    # Check if we have the required data
+    if 'original_image' not in st.session_state or 'detection_results' not in st.session_state:
+        st.warning("Image or detection data not available.")
         return
 
     try:
         import cv2
 
-        # Get the original image
+        # Get the original image and detection results
         original_image = st.session_state['original_image'].copy()
-
-        # Use bright yellow-green color (BGR format for OpenCV)
-        point_color = (50, 255, 50)  # Bright yellow-green
-        point_radius = 3
-        point_thickness = -1  # Filled circle
-
-        total_points = 0
-
-        # Debug: Show more detailed plot area information
-        if 'detection_results' in st.session_state:
-            detection_results = st.session_state['detection_results']
-
-            if 'plot_area' in detection_results:
-                plot_area = detection_results['plot_area']
-                st.write("**Detailed Plot Area Info:**")
-                st.write(f"- Full image size: {plot_area.get('full_width', 'unknown')}x{plot_area.get('full_height', 'unknown')}")
-                st.write(f"- Plot area: ({plot_area['plot_left']}, {plot_area['plot_top']}) to ({plot_area['plot_right']}, {plot_area['plot_bottom']})")
-                plot_width = plot_area['plot_right'] - plot_area['plot_left']
-                plot_height = plot_area['plot_bottom'] - plot_area['plot_top']
-                st.write(f"- Plot dimensions: {plot_width}x{plot_height}")
-
-                # Calculate percentage of image used
-                if 'full_width' in plot_area and 'full_height' in plot_area:
-                    width_percent = (plot_width / plot_area['full_width']) * 100
-                    height_percent = (plot_height / plot_area['full_height']) * 100
-                    st.write(f"- Plot area usage: {width_percent:.1f}% width, {height_percent:.1f}% height")
-
-                    # Warn if plot area seems too small
-                    if width_percent < 50 or height_percent < 50:
-                        st.warning(f"⚠️ Plot area seems too small ({width_percent:.1f}% x {height_percent:.1f}%). This may indicate border detection issues.")
-
-            if 'detected_border' in detection_results:
-                border = detection_results['detected_border']
-                if border:
-                    st.write("- Border detection: SUCCESS")
-                    st.write(f"- Border coordinates: ({border['left']}, {border['top']}) to ({border['right']}, {border['bottom']})")
-                else:
-                    st.write("- Border detection: FAILED (using default margins)")
-
-        # Try to get filtered data points first (these are the actual points used for calibration)
         detection_results = st.session_state['detection_results']
 
-        if 'filtered_data_points' in detection_results:
-            st.write("**Using filtered data points (actual extracted points)**")
-            data_points = detection_results['filtered_data_points']
-        elif 'data_points' in detection_results:
-            st.write("**Using raw data points (before filtering)**")
-            data_points = detection_results['data_points']
-        else:
-            st.warning("No pixel coordinate data available.")
-            return
+        # Use bright yellow-green color for all points
+        point_color = (50, 255, 50)  # BGR format
+        point_radius = 3
+        total_points = 0
 
-        # Draw all data points in the same color
+        # Get data points
+        data_points = detection_results.get('filtered_data_points') or detection_results.get('data_points', {})
+
+        # Get plot box for coordinate transformation
+        plot_box = detection_results.get('plot_0_box', [0, 0, 0, 0])
+        box_x, box_y = plot_box[0], plot_box[1]
+
+        # Draw all data points
         for series_name, points in data_points.items():
-            st.write(f"Drawing series '{series_name}': {len(points)} points")
             for point in points:
-                # Get the original point coordinates (these are in cropped image coordinates)
-                crop_x, crop_y = point[0], point[1]
+                # Transform coordinates from cropped to original image
+                original_x = int(point[0] + box_x)
+                original_y = int(point[1] + box_y)
 
-                # Transform coordinates from cropped image to original image
-                # We need to add the offset from the plot detection box
-                original_x, original_y = crop_x, crop_y
-
-                # Check if we have plot box information for coordinate transformation
-                if 'plot_0_box' in detection_results:
-                    box_x, box_y, box_w, box_h = detection_results['plot_0_box']
-                    # Transform cropped coordinates to original image coordinates
-                    original_x = crop_x + box_x
-                    original_y = crop_y + box_y
-
-                # Convert to integers and ensure they're within image bounds
-                x, y = int(original_x), int(original_y)
-
-                # Check bounds
+                # Check bounds and draw point
                 img_height, img_width = original_image.shape[:2]
-                if 0 <= x < img_width and 0 <= y < img_height:
-                    # Draw the point
-                    cv2.circle(original_image, (x, y), point_radius, point_color, point_thickness)
+                if 0 <= original_x < img_width and 0 <= original_y < img_height:
+                    cv2.circle(original_image, (original_x, original_y), point_radius, point_color, -1)
                     total_points += 1
-                else:
-                    st.write(f"Point ({x}, {y}) is outside image bounds ({img_width}x{img_height})")
 
-        st.write(f"**Total points drawn: {total_points}**")
-
-        # Debug: Show transformation info
-        if 'plot_0_box' in detection_results:
-            box_x, box_y, box_w, box_h = detection_results['plot_0_box']
-            st.write(f"**Coordinate transformation:** Crop offset: ({box_x}, {box_y}), Size: {box_w}x{box_h}")
-
-        # Convert BGR to RGB for display in Streamlit
+        # Convert and display
         image_rgb = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
-
-        # Display the image with overlaid points
-        st.image(image_rgb,
-                caption=f"Original image with {total_points} extracted data points (yellow-green dots)",
-                use_container_width=True)
+        st.image(image_rgb, caption=f"Extracted points overlay ({total_points} points)", use_container_width=True)
 
     except Exception as e:
-        st.error(f"Error creating overlay visualization: {str(e)}")
+        st.error(f"Error creating overlay: {str(e)}")
         if st.session_state.get('debug_mode', False):
             st.exception(e)
 
