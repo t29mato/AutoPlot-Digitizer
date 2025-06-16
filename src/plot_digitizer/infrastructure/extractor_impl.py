@@ -332,25 +332,35 @@ class OpenCVPlotExtractor(IPlotExtractor):
         border = self._detect_plot_border(gray)
 
         if border:
-            # Use detected border as plot area
-            plot_area = {
-                'plot_left': border['left'],
-                'plot_right': border['right'],
-                'plot_top': border['top'],
-                'plot_bottom': border['bottom'],
-                'full_width': w,
-                'full_height': h
-            }
+            # Validate border dimensions - if too small, fall back to margins
+            border_width = border['right'] - border['left']
+            border_height = border['bottom'] - border['top']
 
-            # Try to detect axis ticks for validation
-            try:
-                ticks = self._detect_axis_ticks(gray, border)
-                # Store tick information for visualization
-                self._detection_results['axis_ticks'] = ticks
-            except Exception:
-                pass
+            # Check if detected border is reasonable (at least 30% of image size)
+            if border_width > 0.3 * w and border_height > 0.3 * h:
+                # Use detected border as plot area
+                plot_area = {
+                    'plot_left': border['left'],
+                    'plot_right': border['right'],
+                    'plot_top': border['top'],
+                    'plot_bottom': border['bottom'],
+                    'full_width': w,
+                    'full_height': h
+                }
 
-        else:
+                # Try to detect axis ticks for validation
+                try:
+                    ticks = self._detect_axis_ticks(gray, border)
+                    # Store tick information for visualization
+                    self._detection_results['axis_ticks'] = ticks
+                except Exception:
+                    pass
+
+            else:
+                # Border too small, use fallback
+                border = None
+
+        if not border:
             # Fallback to conservative margin-based detection
             default_margins = self._get_default_margins(w, h)
             plot_area = {
@@ -435,8 +445,14 @@ class OpenCVPlotExtractor(IPlotExtractor):
         boxes = self._plot_detector.detect_plots(img)
         plots: List[PlotData] = []
 
+        # Store plot boxes for coordinate transformation
+        self._detection_results['plot_boxes'] = boxes
+
         for pid, (x, y, w, h) in enumerate(boxes):
             crop = img[y:y+h, x:x+w]
+
+            # Store individual plot box for this plot
+            self._detection_results[f'plot_{pid}_box'] = (x, y, w, h)
 
             # Detect the actual plot area to avoid labels
             plot_area = self._detect_plot_area(crop)
@@ -462,6 +478,9 @@ class OpenCVPlotExtractor(IPlotExtractor):
 
             # Filter out points that are likely axis labels or legends
             filtered_pts = self._filter_data_points(raw_pts, plot_area)
+
+            # Store filtered data points for visualization (these are the actual points used)
+            self._detection_results['filtered_data_points'] = filtered_pts
 
             # Convert pixel coordinates to data coordinates
             series_objs: List[Series] = []

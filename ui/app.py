@@ -112,7 +112,7 @@ def main():
             try:
                 from plot_digitizer.infrastructure.extractor_impl import OpenCVPlotExtractor
                 test_extractor = OpenCVPlotExtractor()
-                st.write(f"✅ Extractor import: OK")
+                st.write("✅ Extractor import: OK")
                 st.write(f"✅ Has get_detection_results: {hasattr(test_extractor, 'get_detection_results')}")
                 st.write(f"✅ Available methods: {[m for m in dir(test_extractor) if 'detection' in m]}")
             except Exception as e:
@@ -349,6 +349,9 @@ def process_plot(uploaded_file):
     tmp_path = None
 
     try:
+        # Import cv2 at the beginning of the function
+        import cv2
+
         # Create temporary file
         tmp_path = create_temp_file_from_upload(uploaded_file)
 
@@ -362,6 +365,11 @@ def process_plot(uploaded_file):
 
         # Execute extraction directly
         results = extractor.extract(tmp_path)
+
+        # Store the original image for visualization
+        original_image = cv2.imread(tmp_path)
+        if original_image is not None:
+            st.session_state['original_image'] = original_image
 
         # Get detection results for visualization
         try:
@@ -435,6 +443,9 @@ def process_plot(uploaded_file):
 
 def detection_analysis_tab():
     """Tab for analyzing detection results step by step"""
+    # Import cv2 for image processing
+    import cv2
+
     st.header("🔍 Detection Analysis")
 
     # Check if we have recent extraction results with detection data
@@ -494,7 +505,7 @@ def detection_analysis_tab():
                     with col2:
                         st.metric("Left Margin", f"{plot_area['plot_left']} px")
                         st.metric("Bottom Margin", f"{plot_area['full_height'] - plot_area['plot_bottom']} px")
-                    
+
                     # Show border detection info
                     if 'detected_border' in detection_results:
                         border = detection_results['detected_border']
@@ -503,7 +514,7 @@ def detection_analysis_tab():
                             st.write(f"Border coordinates: ({border['left']}, {border['top']}) to ({border['right']}, {border['bottom']})")
                         else:
                             st.warning("⚠️ No plot border detected, using default margins")
-                    
+
                     # Show axis ticks info
                     if 'axis_ticks' in detection_results:
                         ticks = detection_results['axis_ticks']
@@ -981,34 +992,165 @@ def display_extraction_visualization(results):
     # Create visualization for each plot
     for plot_idx, plot in enumerate(results['plots']):
         if plot['series']:
-            # Create matplotlib figure
-            fig, ax = plt.subplots(figsize=(8, 6))
+            # Create two columns for different visualizations
+            col1, col2 = st.columns(2)
 
-            # Plot each series
-            colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
+            with col1:
+                st.subheader(f"📊 Plot {plot_idx} - Calibrated Data")
+                # Create matplotlib figure for calibrated data
+                fig, ax = plt.subplots(figsize=(8, 6))
 
-            for series_idx, series in enumerate(plot['series']):
-                if series['points']:
-                    x_coords = [point[0] for point in series['points']]
-                    y_coords = [point[1] for point in series['points']]
+                # Plot each series
+                colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
 
-                    color = colors[series_idx % len(colors)]
-                    ax.scatter(x_coords, y_coords,
-                             c=color, alpha=0.7, s=30,
-                             label=f"{series['sample']} ({len(series['points'])} pts)")
+                for series_idx, series in enumerate(plot['series']):
+                    if series['points']:
+                        x_coords = [point[0] for point in series['points']]
+                        y_coords = [point[1] for point in series['points']]
 
-            ax.set_title(f'Plot {plot_idx} - Extracted Data (Calibrated)')
-            ax.set_xlabel('X Value')
-            ax.set_ylabel('Y Value')
-            ax.legend()
-            ax.grid(True, alpha=0.3)
+                        color = colors[series_idx % len(colors)]
+                        ax.scatter(x_coords, y_coords,
+                                 c=color, alpha=0.7, s=30,
+                                 label=f"{series['sample']} ({len(series['points'])} pts)")
 
-            st.pyplot(fig)
-            plt.close(fig)
+                ax.set_title('Extracted Data (Calibrated)')
+                ax.set_xlabel('X Value')
+                ax.set_ylabel('Y Value')
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+
+                st.pyplot(fig)
+                plt.close(fig)
+
+            with col2:
+                st.subheader(f"🎯 Plot {plot_idx} - Points on Original Image")
+                # Display points on original image
+                display_points_on_original_image()
 
             # Show summary statistics
             total_points = sum(len(s['points']) for s in plot['series'])
             st.success(f"✅ Plot {plot_idx}: {len(plot['series'])} series, {total_points} points extracted")
+
+
+def display_points_on_original_image():
+    """Display extracted data points overlaid on the original image"""
+
+    # Check if we have the original image stored
+    if 'original_image' not in st.session_state:
+        st.warning("Original image not available. Please re-upload the image.")
+        return
+
+    # Check if we have detection results with pixel coordinates
+    if 'detection_results' not in st.session_state:
+        st.warning("Detection results not available.")
+        return
+
+    try:
+        import cv2
+
+        # Get the original image
+        original_image = st.session_state['original_image'].copy()
+
+        # Use bright yellow-green color (BGR format for OpenCV)
+        point_color = (50, 255, 50)  # Bright yellow-green
+        point_radius = 3
+        point_thickness = -1  # Filled circle
+
+        total_points = 0
+
+        # Debug: Show more detailed plot area information
+        if 'detection_results' in st.session_state:
+            detection_results = st.session_state['detection_results']
+
+            if 'plot_area' in detection_results:
+                plot_area = detection_results['plot_area']
+                st.write("**Detailed Plot Area Info:**")
+                st.write(f"- Full image size: {plot_area.get('full_width', 'unknown')}x{plot_area.get('full_height', 'unknown')}")
+                st.write(f"- Plot area: ({plot_area['plot_left']}, {plot_area['plot_top']}) to ({plot_area['plot_right']}, {plot_area['plot_bottom']})")
+                plot_width = plot_area['plot_right'] - plot_area['plot_left']
+                plot_height = plot_area['plot_bottom'] - plot_area['plot_top']
+                st.write(f"- Plot dimensions: {plot_width}x{plot_height}")
+
+                # Calculate percentage of image used
+                if 'full_width' in plot_area and 'full_height' in plot_area:
+                    width_percent = (plot_width / plot_area['full_width']) * 100
+                    height_percent = (plot_height / plot_area['full_height']) * 100
+                    st.write(f"- Plot area usage: {width_percent:.1f}% width, {height_percent:.1f}% height")
+
+                    # Warn if plot area seems too small
+                    if width_percent < 50 or height_percent < 50:
+                        st.warning(f"⚠️ Plot area seems too small ({width_percent:.1f}% x {height_percent:.1f}%). This may indicate border detection issues.")
+
+            if 'detected_border' in detection_results:
+                border = detection_results['detected_border']
+                if border:
+                    st.write("- Border detection: SUCCESS")
+                    st.write(f"- Border coordinates: ({border['left']}, {border['top']}) to ({border['right']}, {border['bottom']})")
+                else:
+                    st.write("- Border detection: FAILED (using default margins)")
+
+        # Try to get filtered data points first (these are the actual points used for calibration)
+        detection_results = st.session_state['detection_results']
+
+        if 'filtered_data_points' in detection_results:
+            st.write("**Using filtered data points (actual extracted points)**")
+            data_points = detection_results['filtered_data_points']
+        elif 'data_points' in detection_results:
+            st.write("**Using raw data points (before filtering)**")
+            data_points = detection_results['data_points']
+        else:
+            st.warning("No pixel coordinate data available.")
+            return
+
+        # Draw all data points in the same color
+        for series_name, points in data_points.items():
+            st.write(f"Drawing series '{series_name}': {len(points)} points")
+            for point in points:
+                # Get the original point coordinates (these are in cropped image coordinates)
+                crop_x, crop_y = point[0], point[1]
+
+                # Transform coordinates from cropped image to original image
+                # We need to add the offset from the plot detection box
+                original_x, original_y = crop_x, crop_y
+
+                # Check if we have plot box information for coordinate transformation
+                if 'plot_0_box' in detection_results:
+                    box_x, box_y, box_w, box_h = detection_results['plot_0_box']
+                    # Transform cropped coordinates to original image coordinates
+                    original_x = crop_x + box_x
+                    original_y = crop_y + box_y
+
+                # Convert to integers and ensure they're within image bounds
+                x, y = int(original_x), int(original_y)
+
+                # Check bounds
+                img_height, img_width = original_image.shape[:2]
+                if 0 <= x < img_width and 0 <= y < img_height:
+                    # Draw the point
+                    cv2.circle(original_image, (x, y), point_radius, point_color, point_thickness)
+                    total_points += 1
+                else:
+                    st.write(f"Point ({x}, {y}) is outside image bounds ({img_width}x{img_height})")
+
+        st.write(f"**Total points drawn: {total_points}**")
+
+        # Debug: Show transformation info
+        if 'plot_0_box' in detection_results:
+            box_x, box_y, box_w, box_h = detection_results['plot_0_box']
+            st.write(f"**Coordinate transformation:** Crop offset: ({box_x}, {box_y}), Size: {box_w}x{box_h}")
+
+        # Convert BGR to RGB for display in Streamlit
+        image_rgb = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
+
+        # Display the image with overlaid points
+        st.image(image_rgb,
+                caption=f"Original image with {total_points} extracted data points (yellow-green dots)",
+                use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Error creating overlay visualization: {str(e)}")
+        if st.session_state.get('debug_mode', False):
+            st.exception(e)
 
 if __name__ == "__main__":
     main()
